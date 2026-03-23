@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useCssStore } from '@/store/use-css-store';
-import { PROPERTY_GROUPS, isStandardProperty } from '@/lib/css-catalog';
+import { getPropertyGroupsForSelector, isStandardProperty } from '@/lib/css-catalog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PropertyInput } from './PropertyInput';
 import { generateCssString } from '@/lib/css-parser';
@@ -10,38 +10,64 @@ import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function EditorPanel() {
-  const { 
-    activeSelector, 
-    rules, 
-    viewMode, 
-    setViewMode, 
-    updateProperty, 
+  const {
+    activeSelector,
+    rules,
+    viewMode,
+    setViewMode,
+    updateProperty,
     toggleProperty,
     deleteProperty,
-    loadCssText
+    loadCssText,
   } = useCssStore();
-  
+
   const [newPropName, setNewPropName] = useState('');
   const [isAddingProp, setIsAddingProp] = useState(false);
 
-  const activeRules = activeSelector ? (rules[activeSelector] || {}) : {};
+  const generatedCss = useMemo(() => generateCssString(rules), [rules]);
 
-  // Extract non-standard (custom) properties for the active selector
-  const customProps = useMemo(() => {
-    return Object.keys(activeRules).filter(prop => !isStandardProperty(prop));
-  }, [activeRules]);
+  // Local raw-edit buffer: keeps a stable string while the user types.
+  // Only syncs back to the structured model when the user explicitly clicks "Apply".
+  const [rawBuffer, setRawBuffer] = useState(generatedCss);
+  const [rawDirty, setRawDirty] = useState(false);
 
-  const handleAddCustomProp = (e: React.FormEvent) => {
+  // When switching TO source mode, seed the buffer from the latest generated CSS.
+  useEffect(() => {
+    if (viewMode === 'source') {
+      setRawBuffer(generatedCss);
+      setRawDirty(false);
+    }
+  }, [viewMode]); // intentionally omit generatedCss so typing is not reset mid-edit
+
+  const handleApplyRaw = useCallback(() => {
+    loadCssText(rawBuffer);
+    setRawDirty(false);
+  }, [rawBuffer, loadCssText]);
+
+  const handleRawChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setRawBuffer(e.target.value);
+    setRawDirty(true);
+  };
+
+  const activeRules = activeSelector ? (rules[activeSelector] ?? {}) : {};
+
+  const propertyGroups = useMemo(
+    () => (activeSelector ? getPropertyGroupsForSelector(activeSelector) : []),
+    [activeSelector],
+  );
+
+  const customProps = useMemo(
+    () => Object.keys(activeRules).filter(prop => !isStandardProperty(prop)),
+    [activeRules],
+  );
+
+  const handleAddCustomProp = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (newPropName.trim() && activeSelector) {
       updateProperty(activeSelector, newPropName.trim(), '');
       setNewPropName('');
       setIsAddingProp(false);
     }
-  };
-
-  const handleRawCssChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    loadCssText(e.target.value);
   };
 
   if (!activeSelector && viewMode === 'editor') {
@@ -60,7 +86,6 @@ export function EditorPanel() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background min-w-[300px] border-r border-border relative z-0">
-      
       <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-card shrink-0">
         <div className="flex items-center gap-2">
           {activeSelector && viewMode === 'editor' ? (
@@ -74,29 +99,29 @@ export function EditorPanel() {
             <span className="text-sm font-semibold text-foreground">Global Source</span>
           )}
         </div>
-        
+
         <div className="flex p-1 bg-secondary rounded-lg">
-          <button 
+          <button
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'editor' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setViewMode('editor')}
           >
-            <div className="flex items-center gap-1.5"><Settings2 size={14}/> Visual</div>
+            <div className="flex items-center gap-1.5"><Settings2 size={14} /> Visual</div>
           </button>
-          <button 
+          <button
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${viewMode === 'source' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setViewMode('source')}
           >
-            <div className="flex items-center gap-1.5"><Code2 size={14}/> Source</div>
+            <div className="flex items-center gap-1.5"><Code2 size={14} /> Source</div>
           </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto relative">
         <AnimatePresence mode="wait">
-          
+
           {/* VISUAL EDITOR MODE */}
           {viewMode === 'editor' && activeSelector && (
-            <motion.div 
+            <motion.div
               key="editor"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -104,50 +129,46 @@ export function EditorPanel() {
               transition={{ duration: 0.2 }}
               className="p-4 space-y-8 pb-20"
             >
-              {PROPERTY_GROUPS.map((group) => {
-                // Check if any property in this group is active to auto-expand or highlight
-                return (
-                  <div key={group.name} className="space-y-3">
-                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider border-b border-border pb-1">
-                      {group.name}
-                    </h3>
-                    <div className="grid gap-3">
-                      {group.properties.map((prop) => {
-                        const state = activeRules[prop.name];
-                        const isEnabled = state?.enabled ?? false;
-                        
-                        return (
-                          <div key={prop.name} className={`flex items-center gap-3 p-1.5 rounded-md transition-colors ${isEnabled ? 'bg-secondary/30' : 'hover:bg-secondary/20'}`}>
-                            <Checkbox 
-                              checked={isEnabled} 
-                              onCheckedChange={(c) => toggleProperty(activeSelector, prop.name, !!c)}
-                              className="mt-0.5 border-muted-foreground/50 data-[state=checked]:bg-primary"
-                            />
-                            <div className="w-1/3 truncate text-xs text-muted-foreground font-mono" title={prop.name}>
-                              {prop.name}
-                            </div>
-                            <div className="flex-1 relative">
-                              {/* Only show input fully opaque if enabled */}
-                              <div className={`transition-opacity duration-200 ${isEnabled ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
-                                <PropertyInput 
-                                  type={prop.type}
-                                  options={prop.options}
-                                  defaultUnit={prop.defaultUnit}
-                                  value={state?.value || ''}
-                                  onChange={(v) => {
-                                    updateProperty(activeSelector, prop.name, v);
-                                    if (!isEnabled && v) toggleProperty(activeSelector, prop.name, true);
-                                  }}
-                                />
-                              </div>
+              {propertyGroups.map((group) => (
+                <div key={group.name} className="space-y-3">
+                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider border-b border-border pb-1">
+                    {group.name}
+                  </h3>
+                  <div className="grid gap-3">
+                    {group.properties.map((prop) => {
+                      const state = activeRules[prop.name];
+                      const isEnabled = state?.enabled ?? false;
+
+                      return (
+                        <div key={prop.name} className={`flex items-center gap-3 p-1.5 rounded-md transition-colors ${isEnabled ? 'bg-secondary/30' : 'hover:bg-secondary/20'}`}>
+                          <Checkbox
+                            checked={isEnabled}
+                            onCheckedChange={(c) => toggleProperty(activeSelector, prop.name, !!c)}
+                            className="mt-0.5 border-muted-foreground/50 data-[state=checked]:bg-primary"
+                          />
+                          <div className="w-1/3 truncate text-xs text-muted-foreground font-mono" title={prop.name}>
+                            {prop.name}
+                          </div>
+                          <div className="flex-1 relative">
+                            <div className={`transition-opacity duration-200 ${isEnabled ? 'opacity-100' : 'opacity-40 grayscale-[50%]'}`}>
+                              <PropertyInput
+                                type={prop.type}
+                                options={prop.options}
+                                defaultUnit={prop.defaultUnit}
+                                value={state?.value ?? ''}
+                                onChange={(v) => {
+                                  updateProperty(activeSelector, prop.name, v);
+                                  if (!isEnabled && v) toggleProperty(activeSelector, prop.name, true);
+                                }}
+                              />
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ))}
 
               {/* CUSTOM PROPERTIES SECTION */}
               <div className="space-y-3 pt-4">
@@ -155,19 +176,19 @@ export function EditorPanel() {
                   <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                     Custom Properties
                   </h3>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 px-2 text-xs" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
                     onClick={() => setIsAddingProp(!isAddingProp)}
                   >
                     <Plus size={14} className="mr-1" /> Add
                   </Button>
                 </div>
-                
+
                 {isAddingProp && (
                   <form onSubmit={handleAddCustomProp} className="flex gap-2 p-2 bg-secondary/30 rounded-md border border-border">
-                    <Input 
+                    <Input
                       autoFocus
                       value={newPropName}
                       onChange={e => setNewPropName(e.target.value)}
@@ -187,23 +208,23 @@ export function EditorPanel() {
                     const isEnabled = state?.enabled ?? false;
                     return (
                       <div key={propName} className={`flex items-center gap-3 p-1.5 rounded-md transition-colors ${isEnabled ? 'bg-secondary/30' : 'hover:bg-secondary/20'}`}>
-                        <Checkbox 
-                          checked={isEnabled} 
+                        <Checkbox
+                          checked={isEnabled}
                           onCheckedChange={(c) => toggleProperty(activeSelector, propName, !!c)}
                         />
                         <div className="w-1/3 truncate text-xs text-accent font-mono">
                           {propName}
                         </div>
                         <div className="flex-1 flex gap-2">
-                          <Input 
-                            value={state?.value || ''}
+                          <Input
+                            value={state?.value ?? ''}
                             onChange={(e) => updateProperty(activeSelector, propName, e.target.value)}
                             className="h-8 text-xs font-mono"
                             placeholder="value..."
                           />
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                             onClick={() => deleteProperty(activeSelector, propName)}
                           >
@@ -215,27 +236,39 @@ export function EditorPanel() {
                   })}
                 </div>
               </div>
-
             </motion.div>
           )}
 
           {/* RAW SOURCE MODE */}
           {viewMode === 'source' && (
-            <motion.div 
+            <motion.div
               key="source"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 p-4"
+              className="absolute inset-0 flex flex-col p-4 gap-3"
             >
               <textarea
-                value={generateCssString(rules)}
-                onChange={handleRawCssChange}
-                className="w-full h-full bg-card/50 text-foreground font-mono text-sm p-4 rounded-xl border border-border shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none scrollbar-thin"
+                value={rawBuffer}
+                onChange={handleRawChange}
+                className="flex-1 bg-card/50 text-foreground font-mono text-sm p-4 rounded-xl border border-border shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none scrollbar-thin"
                 spellCheck={false}
-                placeholder="/* CSS generated will appear here. You can also type raw CSS. */"
+                placeholder="/* Edit CSS here, then click Apply */"
               />
+              <div className="flex items-center gap-2 justify-end shrink-0">
+                <span className={`text-xs ${rawDirty ? 'text-accent' : 'text-muted-foreground'}`}>
+                  {rawDirty ? 'Unsaved edits — click Apply to update the visual editor' : 'In sync with visual editor'}
+                </span>
+                <Button
+                  size="sm"
+                  disabled={!rawDirty}
+                  onClick={handleApplyRaw}
+                  className="h-8"
+                >
+                  Apply
+                </Button>
+              </div>
             </motion.div>
           )}
 
