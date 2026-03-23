@@ -75,8 +75,6 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "react-css-nocode-editor": "^1.0.13",
-    "styled-components": "^6.3.12",
     "zustand": "^5.0.12"
   }
 }

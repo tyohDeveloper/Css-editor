@@ -1,23 +1,10 @@
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
-import { CSSBuilder, type ThemeType } from 'react-css-nocode-editor';
 import { useCssStore } from '@/store/use-css-store';
-import { generateCssString, ruleStateToStyleString } from '@/lib/css-parser';
+import { generateCssString } from '@/lib/css-parser';
 import { Code2, Settings2, PencilLine, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const DARK_THEME: ThemeType = {
-  accent: '#3b82f6',
-  background: '#1e1e2e',
-  color: '#e2e8f0',
-  inputBg: '#2d2d3f',
-  inputColor: '#e2e8f0',
-  inputError: '#f87171',
-  shadow: '0 2px 8px rgba(0,0,0,0.5)',
-  radius: 6,
-  spacing: 10,
-  fontSize: '13px',
-};
+import { GuidedEditor } from './GuidedEditor';
 
 export function EditorPanel() {
   const {
@@ -25,19 +12,11 @@ export function EditorPanel() {
     rules,
     viewMode,
     setViewMode,
-    setSelectorStyle,
     applyRawEdits,
   } = useCssStore();
 
   const generatedCss = useMemo(() => generateCssString(rules), [rules]);
 
-  // The CSSBuilder style string for the active selector (only enabled props)
-  const activeStyleString = useMemo(
-    () => (activeSelector ? ruleStateToStyleString(rules[activeSelector] ?? {}) : ''),
-    [activeSelector, rules],
-  );
-
-  // Source-mode state
   const [rawBuffer, setRawBuffer] = useState(generatedCss);
   const [rawDirty, setRawDirty] = useState(false);
   const [sourceEditable, setSourceEditable] = useState(false);
@@ -48,7 +27,7 @@ export function EditorPanel() {
       setRawDirty(false);
       setSourceEditable(false);
     }
-  }, [viewMode]); // intentionally omit generatedCss to avoid resetting during typing
+  }, [viewMode]);
 
   const displayedSource = rawDirty ? rawBuffer : generatedCss;
 
@@ -70,14 +49,6 @@ export function EditorPanel() {
     setSourceEditable(false);
   };
 
-  const handleCssBuilderChange = useCallback(
-    (style: string) => {
-      if (activeSelector) setSelectorStyle(activeSelector, style);
-    },
-    [activeSelector, setSelectorStyle],
-  );
-
-  // Show empty state only in editor mode with no selector
   if (!activeSelector && viewMode === 'editor') {
     return (
       <div className="flex-1 flex flex-col min-w-[300px] border-r border-border bg-background">
@@ -102,7 +73,6 @@ export function EditorPanel() {
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence mode="wait">
 
-          {/* VISUAL EDITOR — CSSBuilder from react-css-nocode-editor */}
           {viewMode === 'editor' && activeSelector && (
             <motion.div
               key={`editor-${activeSelector}`}
@@ -112,16 +82,10 @@ export function EditorPanel() {
               transition={{ duration: 0.18 }}
               className="absolute inset-0 overflow-y-auto scrollbar-thin"
             >
-              <CSSBuilder
-                style={activeStyleString}
-                theme={DARK_THEME}
-                onChange={handleCssBuilderChange}
-                reactive
-              />
+              <GuidedEditor activeSelector={activeSelector} />
             </motion.div>
           )}
 
-          {/* SOURCE VIEW */}
           {viewMode === 'source' && (
             <motion.div
               key="source"
