@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { parseCssString } from '@/lib/css-parser';
+import { isStandardSelector } from '@/lib/css-catalog';
 import type { FileSystemFileHandle } from '@/lib/file-system-access';
 
 export type PropertyState = {
@@ -34,7 +35,11 @@ interface CssState {
   addCustomSelector: (selector: string) => void;
   deleteSelector: (selector: string) => void;
 
+  /** Called when opening a file from disk — resets dirty state. */
   loadCssText: (cssText: string) => void;
+  /** Called when applying raw source edits — marks dirty. */
+  applyRawEdits: (cssText: string) => void;
+
   resetState: () => void;
 }
 
@@ -47,6 +52,19 @@ const initialState = {
   viewMode: 'editor' as ViewMode,
   fileHandle: null,
 };
+
+function parseAndClassify(cssText: string, existingCustomSelectors: string[]) {
+  const parsedRules = parseCssString(cssText);
+  const customSelectorSet = new Set(existingCustomSelectors);
+
+  for (const sel of Object.keys(parsedRules)) {
+    if (!isStandardSelector(sel)) {
+      customSelectorSet.add(sel);
+    }
+  }
+
+  return { parsedRules, customSelectors: Array.from(customSelectorSet) };
+}
 
 export const useCssStore = create<CssState>()(
   persist(
@@ -121,15 +139,16 @@ export const useCssStore = create<CssState>()(
           };
         }),
 
+      /** File open: parse, classify selectors, reset dirty. */
       loadCssText: (cssText) => {
-        const parsedRules = parseCssString(cssText);
-        const currentCustoms = new Set(get().customSelectors);
-        Object.keys(parsedRules).forEach(sel => currentCustoms.add(sel));
-        set({
-          rules: parsedRules,
-          isDirty: false,
-          customSelectors: Array.from(currentCustoms),
-        });
+        const { parsedRules, customSelectors } = parseAndClassify(cssText, get().customSelectors);
+        set({ rules: parsedRules, isDirty: false, customSelectors });
+      },
+
+      /** Raw source apply: parse, classify selectors, mark dirty. */
+      applyRawEdits: (cssText) => {
+        const { parsedRules, customSelectors } = parseAndClassify(cssText, get().customSelectors);
+        set({ rules: parsedRules, isDirty: true, customSelectors });
       },
 
       resetState: () => set({ ...initialState }),

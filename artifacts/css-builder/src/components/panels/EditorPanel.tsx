@@ -4,7 +4,7 @@ import { getPropertyGroupsForSelector, isStandardProperty } from '@/lib/css-cata
 import { Checkbox } from '@/components/ui/checkbox';
 import { PropertyInput } from './PropertyInput';
 import { generateCssString } from '@/lib/css-parser';
-import { Code2, Settings2, Plus, Trash2 } from 'lucide-react';
+import { Code2, Settings2, Plus, Trash2, Eye, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +18,7 @@ export function EditorPanel() {
     updateProperty,
     toggleProperty,
     deleteProperty,
-    loadCssText,
+    applyRawEdits,
   } = useCssStore();
 
   const [newPropName, setNewPropName] = useState('');
@@ -30,23 +30,42 @@ export function EditorPanel() {
   // Only syncs back to the structured model when the user explicitly clicks "Apply".
   const [rawBuffer, setRawBuffer] = useState(generatedCss);
   const [rawDirty, setRawDirty] = useState(false);
+  // Whether the source panel is in read-only (preview) or editable mode.
+  const [sourceEditable, setSourceEditable] = useState(false);
 
   // When switching TO source mode, seed the buffer from the latest generated CSS.
   useEffect(() => {
     if (viewMode === 'source') {
       setRawBuffer(generatedCss);
       setRawDirty(false);
+      setSourceEditable(false);
     }
   }, [viewMode]); // intentionally omit generatedCss so typing is not reset mid-edit
 
+  // Keep read-only display in sync with structured model when not dirty.
+  const displayedSource = rawDirty ? rawBuffer : generatedCss;
+
   const handleApplyRaw = useCallback(() => {
-    loadCssText(rawBuffer);
+    applyRawEdits(rawBuffer);
     setRawDirty(false);
-  }, [rawBuffer, loadCssText]);
+    setSourceEditable(false);
+  }, [rawBuffer, applyRawEdits]);
 
   const handleRawChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRawBuffer(e.target.value);
     setRawDirty(true);
+  };
+
+  const handleEnableEdit = () => {
+    setRawBuffer(generatedCss);
+    setRawDirty(false);
+    setSourceEditable(true);
+  };
+
+  const handleCancelEdit = () => {
+    setRawBuffer(generatedCss);
+    setRawDirty(false);
+    setSourceEditable(false);
   };
 
   const activeRules = activeSelector ? (rules[activeSelector] ?? {}) : {};
@@ -239,7 +258,7 @@ export function EditorPanel() {
             </motion.div>
           )}
 
-          {/* RAW SOURCE MODE */}
+          {/* SOURCE MODE */}
           {viewMode === 'source' && (
             <motion.div
               key="source"
@@ -249,26 +268,60 @@ export function EditorPanel() {
               transition={{ duration: 0.2 }}
               className="absolute inset-0 flex flex-col p-4 gap-3"
             >
-              <textarea
-                value={rawBuffer}
-                onChange={handleRawChange}
-                className="flex-1 bg-card/50 text-foreground font-mono text-sm p-4 rounded-xl border border-border shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none scrollbar-thin"
-                spellCheck={false}
-                placeholder="/* Edit CSS here, then click Apply */"
-              />
-              <div className="flex items-center gap-2 justify-end shrink-0">
-                <span className={`text-xs ${rawDirty ? 'text-accent' : 'text-muted-foreground'}`}>
-                  {rawDirty ? 'Unsaved edits — click Apply to update the visual editor' : 'In sync with visual editor'}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={!rawDirty}
-                  onClick={handleApplyRaw}
-                  className="h-8"
-                >
-                  Apply
-                </Button>
-              </div>
+              {/* Read-only formatted view */}
+              {!sourceEditable && (
+                <>
+                  <pre className="flex-1 bg-card/50 text-foreground font-mono text-sm p-4 rounded-xl border border-border shadow-inner overflow-auto whitespace-pre-wrap break-words scrollbar-thin">
+                    {displayedSource || '/* No rules defined yet */'}
+                  </pre>
+                  <div className="flex items-center justify-end gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground">Read-only view</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleEnableEdit}
+                      className="h-8 gap-1.5"
+                    >
+                      <PencilLine size={14} /> Edit Source
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {/* Editable raw CSS textarea */}
+              {sourceEditable && (
+                <>
+                  <textarea
+                    value={rawBuffer}
+                    onChange={handleRawChange}
+                    className="flex-1 bg-card/50 text-foreground font-mono text-sm p-4 rounded-xl border border-border shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none scrollbar-thin"
+                    spellCheck={false}
+                    autoFocus
+                    placeholder="/* Edit CSS here, then click Apply */"
+                  />
+                  <div className="flex items-center gap-2 justify-end shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="h-8"
+                    >
+                      Cancel
+                    </Button>
+                    <span className={`text-xs ${rawDirty ? 'text-accent' : 'text-muted-foreground'}`}>
+                      {rawDirty ? 'Unsaved edits — click Apply to update the visual editor' : 'No changes yet'}
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={!rawDirty}
+                      onClick={handleApplyRaw}
+                      className="h-8 gap-1.5"
+                    >
+                      <Eye size={14} /> Apply
+                    </Button>
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
 

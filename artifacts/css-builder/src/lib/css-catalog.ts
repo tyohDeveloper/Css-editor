@@ -248,3 +248,8 @@ export const isStandardProperty = (propName: string): boolean => {
     group.properties.some(p => p.name === propName)
   );
 };
+
+export const STANDARD_SELECTORS: ReadonlySet<string> = new Set(Object.keys(SELECTOR_PROPERTY_GROUPS));
+
+export const isStandardSelector = (selector: string): boolean =>
+  STANDARD_SELECTORS.has(selector);
