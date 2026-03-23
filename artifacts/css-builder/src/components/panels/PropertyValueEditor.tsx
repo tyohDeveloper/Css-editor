@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { CssPropertyDef } from '@/lib/css-catalog';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -8,9 +8,10 @@ interface PropertyValueEditorProps {
   def: CssPropertyDef;
   value: string;
   onChange: (value: string) => void;
+  focusRef?: React.RefObject<HTMLElement | null>;
 }
 
-export function PropertyValueEditor({ def, value, onChange }: PropertyValueEditorProps) {
+export function PropertyValueEditor({ def, value, onChange, focusRef }: PropertyValueEditorProps) {
   const { type, options, defaultUnit, presets } = def;
 
   if (type === 'color') {
@@ -26,6 +27,7 @@ export function PropertyValueEditor({ def, value, onChange }: PropertyValueEdito
             />
           </div>
           <Input
+            ref={focusRef as React.RefObject<HTMLInputElement>}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder="#000000"
@@ -60,9 +62,10 @@ export function PropertyValueEditor({ def, value, onChange }: PropertyValueEdito
     return (
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap gap-1">
-          {options.map((opt) => (
+          {options.map((opt, i) => (
             <button
               key={opt}
+              ref={i === 0 ? (focusRef as React.RefObject<HTMLButtonElement>) : undefined}
               onClick={() => onChange(opt)}
               className={`px-2 py-0.5 rounded text-xs font-mono border transition-all ${
                 value === opt
@@ -125,6 +128,7 @@ export function PropertyValueEditor({ def, value, onChange }: PropertyValueEdito
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-1">
           <Input
+            ref={focusRef as React.RefObject<HTMLInputElement>}
             type={isSpecialUnit ? 'text' : 'number'}
             value={isSpecialUnit ? parsed.unit : parsed.num}
             onChange={handleNumChange}
@@ -172,6 +176,7 @@ export function PropertyValueEditor({ def, value, onChange }: PropertyValueEdito
   return (
     <div className="flex flex-col gap-1.5">
       <Input
+        ref={focusRef as React.RefObject<HTMLInputElement>}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Value..."

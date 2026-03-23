@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronRight, X, Plus } from 'lucide-react';
 import { useCssStore } from '@/store/use-css-store';
 import { getPropertyGroupsForSelector, CssPropertyDef } from '@/lib/css-catalog';
@@ -33,27 +33,33 @@ export function GuidedEditor({ activeSelector }: GuidedEditorProps) {
     allDefs.find(d => d.name === propName);
 
   const [newlyAdded, setNewlyAdded] = useState<string | null>(null);
-  const newlyAddedRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const focusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (newlyAdded && newlyAddedRef.current) {
-      newlyAddedRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    if (!newlyAdded) return;
+    const timer = setTimeout(() => {
+      if (focusRef.current) {
+        focusRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        focusRef.current.focus();
+      }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [newlyAdded]);
 
-  const handleAdd = (def: CssPropertyDef) => {
+  const handleAdd = useCallback((def: CssPropertyDef) => {
     updateProperty(activeSelector, def.name, def.defaultValue);
     setNewlyAdded(def.name);
-  };
+  }, [activeSelector, updateProperty]);
 
-  const handleRemove = (propName: string) => {
+  const handleRemove = useCallback((propName: string) => {
     deleteProperty(activeSelector, propName);
     if (newlyAdded === propName) setNewlyAdded(null);
-  };
+  }, [activeSelector, deleteProperty, newlyAdded]);
 
-  const handleChange = (propName: string, value: string) => {
+  const handleChange = useCallback((propName: string, value: string) => {
     updateProperty(activeSelector, propName, value);
-  };
+  }, [activeSelector, updateProperty]);
 
   const availableGroups = groups.map(group => ({
     ...group,
@@ -64,7 +70,7 @@ export function GuidedEditor({ activeSelector }: GuidedEditorProps) {
   const hasAvailable = availableGroups.length > 0;
 
   return (
-    <div className="flex flex-col gap-0 h-full">
+    <div ref={containerRef} className="flex flex-col gap-0 h-full">
       <section className="flex flex-col">
         <div className="px-4 py-2.5 bg-card/80 border-b border-border sticky top-0 z-10">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -91,7 +97,6 @@ export function GuidedEditor({ activeSelector }: GuidedEditorProps) {
               return (
                 <div
                   key={propName}
-                  ref={isNew ? newlyAddedRef : undefined}
                   className={`px-4 py-3 transition-colors ${isNew ? 'bg-accent/5' : 'hover:bg-card/50'}`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -111,9 +116,11 @@ export function GuidedEditor({ activeSelector }: GuidedEditorProps) {
                       def={def}
                       value={propState?.value ?? ''}
                       onChange={(val) => handleChange(propName, val)}
+                      focusRef={isNew ? focusRef : undefined}
                     />
                   ) : (
                     <input
+                      ref={isNew ? (el) => { focusRef.current = el; } : undefined}
                       value={propState?.value ?? ''}
                       onChange={(e) => handleChange(propName, e.target.value)}
                       className="w-full h-7 px-2 rounded border border-border bg-background/50 text-xs font-mono"
