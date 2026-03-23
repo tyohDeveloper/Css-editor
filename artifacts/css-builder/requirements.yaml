@@ -1,0 +1,10 @@
+packages:
+  "zustand": "State management for the complex CSS rule model and session persistence"
+  "framer-motion": "Smooth animations for UI panels and transitions"
+
+images: []
+
+notes:
+  - "The app relies heavily on the browser's File System Access API (window.showOpenFilePicker / window.showSaveFilePicker) where available, with fallbacks for older browsers."
+  - "State is persisted to sessionStorage using Zustand's persist middleware."
+  - "The generated CSS parser is a lightweight regex-based parser designed for flat CSS files (no nested rules or media queries)."

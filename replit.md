@@ -21,7 +21,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── css-builder/        # CSS File Builder web app (React + Vite, frontend-only)
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -90,6 +91,19 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+
+### `artifacts/css-builder` (`@workspace/css-builder`)
+
+Frontend-only CSS File Builder. No backend required — all state lives in browser.
+
+- Entry: `src/App.tsx` — wouter Router at BASE_URL
+- Pages: `src/pages/Home.tsx` — three-panel layout (Sidebar, EditorPanel, PreviewPanel)
+- State: `src/store/use-css-store.ts` — Zustand store persisted to sessionStorage
+- Data model: `src/lib/css-catalog.ts` — CSS_CATEGORIES and PROPERTY_GROUPS definitions
+- Parser: `src/lib/css-parser.ts` — generateCssString / parseCssString
+- Components: `src/components/panels/` — Header, Sidebar, EditorPanel, PropertyInput, PreviewPanel
+- Key packages: `zustand`, `framer-motion`, Radix UI (checkbox, select, slider, tooltip)
+- `pnpm --filter @workspace/css-builder run dev` — dev server
 
 ### `scripts` (`@workspace/scripts`)
 
