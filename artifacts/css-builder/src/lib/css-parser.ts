@@ -1,4 +1,4 @@
-import { RuleState } from '@/store/use-css-store';
+import { RuleState, PropertyState } from '@/store/use-css-store';
 
 /**
  * Generates a formatted CSS string from the state object.
@@ -72,5 +72,36 @@ export const parseCssString = (css: string): Record<string, RuleState> => {
     }
   }
   
+  return result;
+};
+
+/**
+ * Converts a RuleState (for one selector) to a flat CSS properties string
+ * suitable for passing to CSSBuilder (no selector wrapper).
+ * Only includes enabled properties.
+ */
+export const ruleStateToStyleString = (ruleState: RuleState): string => {
+  return Object.entries(ruleState)
+    .filter(([, ps]) => ps.enabled && ps.value.trim() !== '')
+    .map(([prop, ps]) => `${prop}: ${ps.value};`)
+    .join('\n');
+};
+
+/**
+ * Parses a flat CSS properties string (output from CSSBuilder's onChange)
+ * into a RuleState. All parsed properties are enabled.
+ */
+export const styleStringToRuleState = (css: string): RuleState => {
+  const result: RuleState = {};
+  const lines = css.split(/[\n;]/).map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const prop = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim().replace(/;$/, '').trim();
+    if (prop) {
+      result[prop] = { value, enabled: true } satisfies PropertyState;
+    }
+  }
   return result;
 };

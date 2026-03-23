@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { parseCssString } from '@/lib/css-parser';
+import { parseCssString, styleStringToRuleState } from '@/lib/css-parser';
 import { isStandardSelector } from '@/lib/css-catalog';
 import type { FileSystemFileHandle } from '@/lib/file-system-access';
 
@@ -34,6 +34,9 @@ interface CssState {
 
   addCustomSelector: (selector: string) => void;
   deleteSelector: (selector: string) => void;
+
+  /** Replace the entire rule set for a single selector from a CSS properties string (CSSBuilder onChange). */
+  setSelectorStyle: (selector: string, styleString: string) => void;
 
   /** Called when opening a file from disk — resets dirty state. */
   loadCssText: (cssText: string) => void;
@@ -138,6 +141,16 @@ export const useCssStore = create<CssState>()(
             activeSelector: state.activeSelector === selector ? null : state.activeSelector,
           };
         }),
+
+      /** Replace the entire rule set for a single selector from a CSS properties string. */
+      setSelectorStyle: (selector, styleString) =>
+        set((state) => ({
+          isDirty: true,
+          rules: {
+            ...state.rules,
+            [selector]: styleStringToRuleState(styleString),
+          },
+        })),
 
       /** File open: parse, classify selectors, reset dirty. */
       loadCssText: (cssText) => {
